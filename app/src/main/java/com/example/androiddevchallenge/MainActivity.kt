@@ -18,16 +18,28 @@ package com.example.androiddevchallenge
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Surface
-import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.navigation.NavController
+import androidx.navigation.compose.*
+import com.example.androiddevchallenge.ScreenRoute.Companion.ServiceDetailBaseRoute
+import com.example.androiddevchallenge.ScreenRoute.Companion.ServicesListRoute
+import com.example.androiddevchallenge.ScreenRoute.Companion.serviceDetail
+import com.example.androiddevchallenge.data.Categories
+import com.example.androiddevchallenge.data.Services
+import com.example.androiddevchallenge.data.StaffMembers
+import com.example.androiddevchallenge.data.model.ServiceId
+import com.example.androiddevchallenge.ui.model.*
 import com.example.androiddevchallenge.ui.theme.MyTheme
 
 class MainActivity : AppCompatActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         setContent {
             MyTheme {
                 MyApp()
@@ -36,26 +48,83 @@ class MainActivity : AppCompatActivity() {
     }
 }
 
+@Composable
+fun ServiceListScreen(
+    navController: NavController,
+    presenter: ServiceListPresenter
+) {
+    val viewState by presenter.viewState
+    when (viewState) {
+        ServiceListViewState.Loading -> ServicesLoading(viewState as ServiceListViewState.Loading)
+        is ServiceListViewState.Ready -> ServiceList(
+            viewState = viewState as ServiceListViewState.Ready,
+            updateCategorySelection = {
+                presenter.updateCategorySelection(it.category, it.selected)
+            },
+            onServiceSelected = {
+                navController.navigate(serviceDetail(it))
+            })
+    }
+
+}
+
 // Start building your app here!
 @Composable
 fun MyApp() {
-    Surface(color = MaterialTheme.colors.background) {
-        Text(text = "Ready... Set... GO!")
+    val navController = rememberNavController()
+    NavHost(navController = navController, startDestination = ServicesListRoute.route) {
+        composable(ServicesListRoute.route) {
+            ServiceListScreen(navController, remember { ServiceListPresenter() })
+        }
+        composable(
+            ServiceDetailBaseRoute.route,
+            arguments = listOf(navArgument("serviceId") {})
+        ) { backstackEntry ->
+            val serviceId = ServiceId(backstackEntry.arguments?.getString("serviceId")!!)
+            ServiceDetailScreen(
+                navController,
+                remember(serviceId) { ServiceDetailPresenter(serviceId) }
+            )
+        }
     }
+
+
 }
 
-@Preview("Light Theme", widthDp = 360, heightDp = 640)
 @Composable
-fun LightPreview() {
+fun ServiceDetailScreen(navController: NavController, presenter: ServiceDetailPresenter) {
+    val viewState by presenter.viewState.collectAsState(initial = ServiceDetailViewState.Loading)
+    ServiceDetail(
+        viewState,
+        navigateUp = { navController.navigateUp() }
+    )
+}
+
+@Preview()
+@Composable
+fun LightPreviewList() {
     MyTheme {
-        MyApp()
+        ServiceList(
+            viewState = ServiceListViewState.Ready(
+                Services.allServices.toListViewPresentation(),
+                Categories.allCategories.map { it to true }
+            ),
+            updateCategorySelection = { },
+            onServiceSelected = {}
+        )
     }
 }
 
-@Preview("Dark Theme", widthDp = 360, heightDp = 640)
+@Preview()
 @Composable
-fun DarkPreview() {
-    MyTheme(darkTheme = true) {
-        MyApp()
+fun LightPreviewDetail() {
+    MyTheme {
+        ServiceDetail(
+            viewState = ServiceDetailViewState.Ready(
+                Services.therapeuticMassage.toDetailPresentation(),
+                StaffMembers.allStaff.toPresentation()
+            ),
+            navigateUp = { }
+        )
     }
 }
